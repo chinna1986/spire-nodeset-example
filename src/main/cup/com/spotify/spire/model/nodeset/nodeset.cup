@@ -1,0 +1,78 @@
+package com.spotify.spire.model.nodeset;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import java_cup.runtime.*;
+
+/* Terminals (tokens returned by the scanner). */
+terminal BACKSLASH, SLASH, PIPE, CIRCUMFLEX, AMPERSAND;
+terminal UNION, CIRCLED_MINUS, INCREMENT, INTERSECTION;
+terminal COMMA, DOT, AT, EMPTY_SET;
+terminal LPAREN, RPAREN, LBRACKET, RBRACKET;
+
+terminal String  IDENTIFIER;
+terminal String  QSTRING;
+terminal Double  DECIMAL;
+terminal Long    INTEGER;
+terminal Boolean BOOLEAN;
+
+/* Non-terminals */
+non terminal                              diff_op, intersect_op, symdiff_op, union_op;
+non terminal NodeSetTree.Expression       call, expr, list, literal, set_expr;
+non terminal List<String>                 qidentifier;
+non terminal List<NodeSetTree.Expression> args;
+
+/* Precedences */
+precedence left COMMA;
+precedence left BACKSLASH, SLASH;
+precedence left PIPE, UNION;
+precedence left CIRCUMFLEX, CIRCLED_MINUS, INCREMENT;
+precedence left AMPERSAND, INTERSECTION;
+precedence left DOT;
+
+start with set_expr;
+
+/* The grammar */
+set_expr ::= list:e                             {: RESULT = e; :}
+           | call:e                             {: RESULT = e; :}
+           | LPAREN set_expr:e RPAREN           {: RESULT = e; :}
+           | set_expr:a diff_op set_expr:b      {: RESULT = new NodeSetTree.CallExpression(Arrays.asList(new String[] { BuiltinNodeSetContext.BUILTIN_NAMESPACE, "\\" }), a, b); :}
+           | set_expr:a union_op set_expr:b     {: RESULT = new NodeSetTree.CallExpression(Arrays.asList(new String[] { BuiltinNodeSetContext.BUILTIN_NAMESPACE, "∪" }), a, b); :}
+           | set_expr:a symdiff_op set_expr:b   {: RESULT = new NodeSetTree.CallExpression(Arrays.asList(new String[] { BuiltinNodeSetContext.BUILTIN_NAMESPACE, "⊖" }), a, b); :}
+           | set_expr:a intersect_op set_expr:b {: RESULT = new NodeSetTree.CallExpression(Arrays.asList(new String[] { BuiltinNodeSetContext.BUILTIN_NAMESPACE, "∩" }), a, b); :}
+           ;
+
+diff_op      ::= BACKSLASH | SLASH ;
+intersect_op ::= AMPERSAND | INTERSECTION ;
+symdiff_op   ::= CIRCLED_MINUS | INCREMENT | CIRCUMFLEX ;
+union_op     ::= PIPE | UNION ;
+
+list ::= EMPTY_SET                {: RESULT = new NodeSetTree.ListExpression(new ArrayList<NodeSetTree.Expression>()); :}
+       | LBRACKET RBRACKET        {: RESULT = new NodeSetTree.ListExpression(new ArrayList<NodeSetTree.Expression>()); :}
+       | AT qidentifier:qi        {: List<NodeSetTree.Expression> l = new ArrayList<>(); l.add(new NodeSetTree.LiteralExpression(Utils.joinStrings(qi, "."))); RESULT = new NodeSetTree.ListExpression(l); :}
+       | LBRACKET args:a RBRACKET {: RESULT = new NodeSetTree.ListExpression(a); :}
+       ;
+
+args ::= expr:e              {: RESULT = new ArrayList<NodeSetTree.Expression>(); RESULT.add(e); :}
+       | args:a COMMA expr:e {: a.add(e); RESULT = a; :}
+       ;
+
+expr ::= literal:e  {: RESULT = e; :}
+       | set_expr:e {: RESULT = e; :}
+       ;
+
+literal ::= QSTRING:l {: RESULT = new NodeSetTree.LiteralExpression(l); :}
+          | DECIMAL:l {: RESULT = new NodeSetTree.LiteralExpression(l); :}
+          | INTEGER:l {: RESULT = new NodeSetTree.LiteralExpression(l); :}
+          | BOOLEAN:l {: RESULT = new NodeSetTree.LiteralExpression(l); :}
+          ;
+
+qidentifier ::= IDENTIFIER:i                    {: RESULT = new ArrayList<String>(); RESULT.add(i); :}
+              | qidentifier:qi DOT IDENTIFIER:i {: qi.add(i); RESULT = qi; :}
+              ;
+
+call ::= qidentifier:qi                      {: RESULT = new NodeSetTree.CallExpression(qi, new ArrayList<NodeSetTree.Expression>()); :}
+       | qidentifier:qi LPAREN args:a RPAREN {: RESULT = new NodeSetTree.CallExpression(qi, a); :}
+       ;

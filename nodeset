@@ -1,0 +1,31 @@
+#!/bin/bash -e
+#
+# Simple (but slow) driver script for the NodeSetMain class.
+#
+
+[ -d "target/classes" ] || mvn compile
+
+# exec:java isn't very good with handling arguments, so just extract
+# dependencies and run with plain java(1).
+#
+# Since mvn(1) is slow to start, cache the dependencies.
+[ -e ".mvn-deps" ] || mvn dependency:build-classpath -Dmdep.outputFilterFile=true -Dattach=true | sed 's/^classpath=// p ; d' >.mvn-deps
+
+if [ $# -eq 0 ]
+then
+	# Some built-in examples to get you started.
+	args=(
+		∅
+		@example.com
+		'["example.com"]'
+		'fs.ls("/") & fs.ls("/mnt")'
+	)
+else
+	# You can also specify your own.
+	args=( "$@" )
+fi
+
+exec java \
+	-cp "target/classes:$(<.mvn-deps)" \
+	com.spotify.spire.model.nodeset.NodeSetMain \
+	"${args[@]}"
